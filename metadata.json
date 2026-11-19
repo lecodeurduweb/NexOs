@@ -1,0 +1,6 @@
+{
+  "name": "NexOS ARM64 Server OS",
+  "description": "Independent headless ARM64/AArch64 server operating system for Raspberry Pi 4 (BCM2711) and QEMU virt.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

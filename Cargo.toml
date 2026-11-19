@@ -1,0 +1,27 @@
+[package]
+name = "nexos-kernel"
+version = "0.1.0"
+edition = "2021"
+authors = ["NexOS Engineering"]
+description = "Independent headless ARM64/AArch64 server operating system"
+
+[[bin]]
+name = "nexos-kernel"
+path = "kernel/main.rs"
+test = false
+bench = false
+
+[features]
+default = ["board-qemu-virt"]
+board-qemu-virt = []
+board-rpi4 = []
+
+[profile.dev]
+panic = "abort"
+opt-level = 1
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+lto = true
+codegen-units = 1
