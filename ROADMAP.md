@@ -19,3 +19,15 @@ Les étapes suivent un ordre strict : chaque étape doit être **compilée et te
 | 12 | Gestionnaire de services, journalisation, auth/permissions, watchdog | Cycle de vie de services, comptes, permissions vérifiés |
 | 13 | Administration Web minimale (HTTP authentifié) | Métriques réelles (CPU, RAM, processus, services, logs) servies via HTTP |
 | 14 | NexOS AI Core (conception ou démon hors ligne borné) | API système documentée, contraintes mémoire/thermiques respectées |
+
+## Additions récentes
+
+| Élément | Etat réel |
+|---|---|
+| Coordinateur AI avec agents système/réseau/sécurité/mémoire/stockage/processus/diagnostic/réparation | Implémenté et intégré aux API |
+| Passerelle hôte Ollama/OpenAI-compatible | Implémentée, non vérifiée contre un fournisseur externe |
+| Interface React d'administration | Compilée/type-checkée; les API doivent être présentes au runtime |
+| Validation matérielle Pi4 | Bloquée, aucun matériel disponible |
+| USB complet | Non terminé |
+| Mémoire persistante IA | Implémentée et testée sur disque/reboot QEMU |
+| Réparation approuvée avec vérification | Implémentée/testée sur health-svc dans le test HTTPS |

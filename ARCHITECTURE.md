@@ -12,13 +12,13 @@ NexOS est un système d'exploitation **serveur headless indépendant** (non bas�
    - `arch/arm64/boards/qemu_virt/` : Configuration spécifique QEMU `virt` (linker script `0x40080000`, adresse d'amorçage UART PL011 pré-DTB documentée).
    - `arch/arm64/boards/rpi4/` : Configuration spécifique Raspberry Pi 4 (linker script `0x80000`, `config.txt`, `kernel8.img`, contrôleur ARM Local BCM2711, spécificités Mini-UART/PL011, limitations DMA BCM2711).
    - `kernel/` : Cœur générique indépendant de la carte (`main.rs`, `log.rs` avec tampon circulaire, `services.rs` + watchdog, `syscall.rs`).
-   - `drivers/` : Pilotes périphériques découplés par traits et découverts via DTB (`uart/`, `gicv2.rs`, `gpio_bcm2711.rs`, `mailbox_bcm2711.rs`, `rng_bcm2711.rs`, `block/` [`ramdisk`, `cache`, `sd_emmc2` Pi 4], `net/` [`genet` Pi 4], `virtio/` [`blk`, `net`, `rng`]).
-   - `filesystem/` : VFS (`/ram`, `/disk`) avec curseurs de streaming (`VfsCursor`/`FatFileCursor`), parseur de partitions MBR/GPT, système de fichiers FAT32 lecture/écriture.
+   - `drivers/` : Pilotes périphériques découplés par traits et découverts via DTB (`uart/`, `gicv2.rs`, `block/` [`ramdisk`, `sd_emmc2` Pi 4], `net/` [`genet` Pi 4], `virtio/` [`blk`, `net`]).
+   - `filesystem/` : VFS (`/ram`, `/disk`), parseur de partitions MBR/GPT, système de fichiers FAT32 lecture/écriture.
    - `network/` : Pile réseau indépendante (`eth`, `arp`, `ipv4`, `icmp`, `udp`, `dhcp`, `dns`, `tcp`, `ipv6`, `tls` TLS 1.3).
-   - `security/` : CSPRNG ChaCha20 DRBG, `PBKDF2-HMAC-SHA256` (4096 it.), RBAC (`Admin`/`Operator`/`Viewer`/`AiAgent`), persistance `/disk/NEXUSERS.DB`, sessions Bearer, lockout backoff et audit.
-   - `web-admin/` : Serveur HTTP/1.1 (`:80`) et HTTPS TLS 1.3 (`:443`) exposant le dashboard SPA et l'API `/api/v1/*`.
-   - `ai_core/` + `arch/arm64/neon_gemv.S` : Moteur d'inférence natif ARM64 NEON SIMD `.nxm` v1 Q8_0 + agent autonome (`agent.rs`, outils, diagnostic, réparation RBAC, `/disk/AIMEM.DB`), sans Linux/Python/`llama.cpp`.
-   - `memory/` : Gestionnaire mémoire physique (44-bit PA, zones réservées DTB + DMA), MMU (tables L0–L3), tas noyau (`heap`, 64 MiB), et **`ai_arena`** (aperture `+16 GiB`, allocation page par page pour modèles multi-Go avec réserve OS `128 MiB`).
+   - `security/` : `PBKDF2-HMAC-SHA256` (4096 it.), RBAC (`Admin`/`Operator`/`Viewer`/`AiAgent`), sessions Bearer, lockout backoff et audit.
+   - `web-admin/` : Serveur HTTP/1.1 (`:80`) et HTTPS TLS 1.3 (`:443`) exposant l'API `/api/v1/*`.
+   - `ai_core/` + `arch/arm64/neon_gemv.S` : Moteur d'inférence natif ARM64 NEON SIMD `.nxm` v1 Q8_0 (zéro dépendance Linux/Python/llama.cpp).
+   - `memory/` : Gestionnaire mémoire physique (respectant la largeur PA détectée et les zones réservées DTB + DMA), MMU (tables de pages L0–L3), allocateur de tas noyau (`heap`).
    - `scheduler/` : Ordonnanceur préemptif SMP 4 cœurs à priorités, changement de contexte AArch64 (`x0..x30` + `Q0..Q31`), threads noyau et processus EL0.
 
 2. **Découverte Matérielle par Device Tree (DTB)**

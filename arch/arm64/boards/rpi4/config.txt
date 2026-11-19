@@ -1,0 +1,19 @@
+# NexOS Raspberry Pi 4 Model B Boot Configuration
+# STATUS: NON TESTÉE SUR MATÉRIEL (Generated for VideoCore start4.elf)
+
+# Force 64-bit AArch64 mode (loads kernel8.img at 0x80000)
+arm_64bit=1
+
+# Headless server: enable UART console on GPIO 14/15 (115200 8N1)
+enable_uart=1
+uart_2ndstage=1
+
+# Explicit kernel image name
+kernel=kernel8.img
+
+# Minimize GPU memory split for headless server (16 MiB minimum for VideoCore)
+gpu_mem=16
+
+# Keep BCM2711 in 35-bit low peripheral mode (peripherals at 0xFE000000)
+# Do not enable arm_peri_high unless kernel board base is updated accordingly.
+dtoverlay=disable-bt

@@ -26,7 +26,7 @@ fi
 build_userspace() {
     echo "==> Building NexOS EL0 userspace (userspace/init.bin)..."
     mkdir -p build/userspace
-    aarch64-linux-gnu-gcc -ffreestanding -nostdlib -nostartfiles -static -O2 -Wall -Wextra \
+    aarch64-linux-gnu-gcc -B/usr/bin/aarch64-linux-gnu- -ffreestanding -nostdlib -nostartfiles -static -O2 -Wall -Wextra \
         -mgeneral-regs-only -Wl,-T,userspace/user.ld -Wl,--build-id=none \
         userspace/crt0.S userspace/init.c -o build/userspace/init.elf
     "$OBJCOPY" -O binary build/userspace/init.elf build/userspace/init.bin
@@ -48,10 +48,12 @@ build_rpi4() {
     build_userspace
     echo "==> Building NexOS for Raspberry Pi 4 (BCM2711) [${PROFILE}]..."
     mkdir -p build/rpi4
-    RUSTFLAGS="-C relocation-model=static -C code-model=small -C link-arg=-Tarch/arm64/boards/rpi4/linker.ld" \
+    RUSTFLAGS="-C relocation-model=static -C code-model=small -C link-arg=-Tarch/arm64/boards/rpi4/linker.ld -C link-arg=-Map=build/rpi4/kernel.map" \
         cargo build $CARGO_PROFILE_FLAG --no-default-features --features board-rpi4 --target aarch64-unknown-none
     cp "target/aarch64-unknown-none/${TARGET_SUBDIR}/nexos-kernel" "build/rpi4/nexos-rpi4.elf"
     "$OBJCOPY" -O binary "build/rpi4/nexos-rpi4.elf" "build/rpi4/kernel8.img"
+    cp "build/rpi4/nexos-rpi4.elf" "build/rpi4/kernel.elf"
+    cp "build/rpi4/kernel8.img" "build/rpi4/nexos.img"
     cp "arch/arm64/boards/rpi4/config.txt" "build/rpi4/config.txt"
     echo "    NOTE: Pi 4 artifacts (kernel8.img, config.txt) are NON TESTÉS SUR MATÉRIEL."
     ls -lh build/rpi4/nexos-rpi4.elf build/rpi4/kernel8.img build/rpi4/config.txt
