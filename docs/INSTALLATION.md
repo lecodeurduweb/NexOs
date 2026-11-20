@@ -15,8 +15,10 @@ Paramètres par défaut de `./run.sh` :
 
 ### Accès Admin Après Boot (~0.8–1.5 s)
 - Console série UART : prompt `nexos#` (shell EL0).
-- Web Admin TLS 1.3 : `curl -k https://127.0.0.1:18443/api/v1/system -u admin:nexos-admin-2026`
-- *(Modifier les comptes par défaut via `POST /api/v1/users` / rotation avant toute exposition réseau.)*
+- Web Admin : `http://127.0.0.1:18080/` et `https://127.0.0.1:18443/`.
+- Au premier démarrage, récupérer le jeton temporaire affiché sur la console UART, puis créer le compte administrateur via `POST /api/v1/setup` en HTTPS. Aucun mot de passe administrateur universel ne doit être supposé.
+- Après provisioning, se connecter via `/api/login` et utiliser le jeton Bearer pour les routes `/api/v1/*`.
+- Ne jamais exposer l'interface d'administration directement à Internet sans revue de sécurité et configuration réseau adaptées.
 
 ## 2. Préparation Carte SD pour Raspberry Pi 4 (`[COMPILÉ / NON TESTÉ SUR MATÉRIEL]`)
 
