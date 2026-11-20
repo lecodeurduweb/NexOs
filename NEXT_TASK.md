@@ -1,21 +1,38 @@
 # NEXT_TASK.md — reprise immédiate
 
-Date : 2026-11-20
+Dernière mise à jour : 2026-11-20 (session 2)
 
-## Contexte vérifié (dépôt réel)
-- Branches : `main` (f822525, dépôt complet), `ci/quality-gates` (f45fb6b8, PR #1 ouverte, non fusionnée), `fix/ci-diagnostics` (cette branche).
-- CI du commit f45fb6b8 : run `push` 44691848637 = succès, run `pull_request` 44691864911 = échec à l'étape « Run complete build and QEMU test suite » (exit 1). Même code, résultats différents => test non déterministe. La cause exacte n'était PAS récupérable : l'ancien `tests/run_all.py` n'affichait pas le transcript UART à l'échec. Rien ne prouve une cause IPv6.
+## État CI (branche `fix/ci-diagnostics`, PR #2)
 
-## Ce que fait cette branche
-- `tests/run_all.py` : statuts PASS/FAIL/SKIP(exit 77)/BLOCKED par étape, journaux dans `build/test-logs/`, transcript UART affiché et sauvegardé à l'échec, liste exacte des marqueurs manquants, attente du prompt pilotée par événement (timeout `NEXOS_BOOT_TIMEOUT`, défaut 90 s) au lieu de 30 s fixes + sleeps, rapport `report.json`. Les lignes « SKIPPED » codées en dur ont été supprimées.
-- `.github/workflows/ci.yml` : diagnostics d'environnement, affichage du rapport et du transcript, artefact `nexos-test-logs-*`.
+| Run | Événement | Résultat | Durée | Observation |
+|---|---|---|---|---|
+| 44691848637 | push f45fb6b8 | PASS | — | ancienne suite (sans diagnostics) |
+| 44691864911 | pull_request f45fb6b8 | FAIL | — | même commit → non déterministe, cause illisible |
+| 44735816524 | push 71882ce | FAIL | 2 min 56 s | échec à « Run complete build and QEMU test suite », **durée trop courte pour un build Rust + QEMU complet → échec précoce probable dans `./build.sh all`** |
 
-## Tâche suivante (ordre)
-1. Faire tourner la CI sur `fix/ci-diagnostics` (push déclenche le workflow) et lire `report.json` / transcript pour identifier le marqueur réellement manquant dans le run flaky. Relancer 3 fois (`workflow_dispatch`) pour mesurer la flakiness.
-2. Adapter `scripts/test_stage11_net.py` pour sortir avec le code 77 quand TAP est indisponible (actuellement il faut vérifier son code de sortie : un SKIP ne doit jamais être un PASS).
-3. Corriger la cause racine identifiée (probable : timing boot QEMU sur runner 2 vCPU, ou course sur ports 18080/18443).
-4. Ensuite seulement : Phase 1 noyau (audit MMU/W^X/SMP), Phase 2 pilotes BCM2711 (EMMC2 réel, GENET), etc. Voir ROADMAP.md.
+Les logs détaillés ne sont pas lisibles via l'API dans la session actuelle. Les artefacts
+`nexos-test-logs-44735816524` (report.json + logs par étape) existent et doivent être lus en premier.
 
-## Non fait / non prouvé
-- Aucune compilation ni exécution QEMU n'a été réalisée dans cette session (pas d'environnement d'exécution disponible) : la nouvelle suite doit être validée par la CI GitHub.
-- Aucune validation Raspberry Pi 4 physique.
+## Tâche n°1 (bloquante) — lire le vrai log de build
+1. Ouvrir le run 44735816524 → artefact `nexos-test-logs-*` → `build/test-logs/1__Build_*.log` et `report.json`.
+2. Hypothèses à vérifier dans l'ordre :
+   - `cargo build --target aarch64-unknown-none` : erreur de compilation avec le `stable` courant
+     (features instables, `asm!`, lints promus en erreur) ;
+   - `aarch64-linux-gnu-gcc -B/usr/bin/aarch64-linux-gnu-` : `ld` croisé absent (`binutils-aarch64-linux-gnu` est installé mais vérifier `aarch64-linux-gnu-ld`) ;
+   - `llvm-objcopy` : paquet `llvm` sur ubuntu-24.04 fournit `llvm-objcopy-18` sans alias → fallback vers `aarch64-linux-gnu-objcopy` attendu ; vérifier.
+3. Corriger, pousser sur `fix/ci-diagnostics`, relancer 3× (`workflow_dispatch`) pour mesurer la flakiness.
+
+## Tâche n°2 — valider les correctifs de la session 2 (NOT TESTED localement)
+- `scripts/mk_rpi4_sd.py` : image 272 MiB sparse, ≥ 65 525 clusters, FSInfo + secteurs de secours. L'étape 1d de
+  `tests/run_all.py` doit toujours passer ; ajouter une assertion `clusters >= 65525` et une vérification FSInfo à 1d.
+  Vérifier que `fsck.fat -n build/rpi4/nexos-rpi4-sd.img` (avec offset) n'émet aucune erreur.
+- `scripts/test_stage11_net.py` : exit 77 → doit apparaître en `SKIP` dans `report.json` sur le runner GitHub.
+
+## Ensuite (ordre de priorité)
+3. Phase 1 : audit MMU/W^X/SMP par lecture de `arch/arm64/mmu.rs`, `smp.rs`, `kernel/sync.rs`.
+4. Phase 2 : EMMC2 (`drivers/block/sd_emmc2.rs`) et GENET (`drivers/net/genet.rs`) — remplacer les mocks MMIO par les vrais chemins BCM2711 en gardant les tests mock pour QEMU.
+5. Créer `CHANGELOG.md`, `AI_CORE.md` (absents sur `main`).
+
+## Toujours non validé
+- Raspberry Pi 4 physique : aucun test effectué.
+- TAP : SKIP sur runner sans CAP_NET_ADMIN.

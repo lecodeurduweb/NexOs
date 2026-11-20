@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Stage 11 End-to-End Network Verification: Host <-> NexOS QEMU via TAP + PCAP inspection."""
+"""Stage 11 End-to-End Network Verification: Host <-> NexOS QEMU via TAP + PCAP inspection.
+
+Exit codes:
+  0  - all TAP/PCAP assertions passed
+  77 - SKIP: the environment cannot create a TAP interface (no CAP_NET_ADMIN).
+       tests/run_all.py reports this as SKIP, never as PASS.
+  1  - a real failure
+"""
 
 import os
 import pty
@@ -15,6 +22,7 @@ TAP_IF = "nexostap0"
 HOST_IP = "10.77.0.1"
 VM_IP = "10.77.0.2"
 PCAP_PATH = "build/stage11_tap.pcap"
+SKIP_EXIT_CODE = 77
 
 
 def run_cmd(cmd, check=True):
@@ -41,7 +49,6 @@ def start_dns_server(stop_event, stats):
         if len(data) < 12:
             continue
         txid = data[0:2]
-        # Find end of QNAME
         idx = 12
         while idx < len(data) and data[idx] != 0:
             idx += 1 + data[idx]
@@ -117,25 +124,24 @@ def inspect_pcap(path):
     return counts
 
 
+def skip(reason, detail=""):
+    print(f"[SKIP] Stage 11 TAP verification is blocked: {reason}")
+    if detail:
+        print(f"[SKIP] host response: {detail}")
+    print("[SKIP] Bidirectional host<->VM ICMP/ARP/DNS/TCP over TAP was NOT verified in this run.")
+    sys.exit(SKIP_EXIT_CODE)
+
+
 def main():
     os.makedirs("build", exist_ok=True)
     if os.path.exists(PCAP_PATH):
         os.remove(PCAP_PATH)
 
-    # Create host TAP with deterministic valid unicast MAC
     run_cmd(f"ip tuntap del dev {TAP_IF} mode tap 2>/dev/null || true", check=False)
     tap_result = run_cmd(f"ip tuntap add dev {TAP_IF} mode tap", check=False)
     if tap_result.returncode != 0:
-        detail = (tap_result.stderr or tap_result.stdout).strip()
-        print(
-            "[SKIP] Stage 11 TAP verification is blocked: the environment "
-            "does not permit creating a TAP interface."
-        )
-        if detail:
-            print(f"[SKIP] host response: {detail}")
-        print("[SKIP] QEMU VirtIO-Net, DHCP, IPv4/IPv6, UDP/DNS/TCP and TLS "
-              "remain verified in their in-kernel/host-forward tests.")
-        return
+        skip("the environment does not permit creating a TAP interface",
+             (tap_result.stderr or tap_result.stdout).strip())
     run_cmd(f"ip link set dev {TAP_IF} address 02:77:00:00:00:01")
     run_cmd(f"ip addr add {HOST_IP}/24 dev {TAP_IF}")
     run_cmd(f"ip link set {TAP_IF} up")
@@ -167,22 +173,19 @@ def main():
 
     uart_log = bytearray()
     try:
-        out, ok = read_until(master, "nexos#", timeout=15.0, log_buf=uart_log)
+        out, ok = read_until(master, "nexos#", timeout=float(os.environ.get("NEXOS_BOOT_TIMEOUT", "60")), log_buf=uart_log)
         print(out, end="")
         if not ok:
             print("\n[FAIL] Did not reach nexos# prompt")
             sys.exit(1)
 
-        # Give net-poll 50ms
         time.sleep(0.2)
 
-        # 1. Host -> VM ping
         print("\n=== [TEST 1] Host -> VM ICMP Ping (10.77.0.2) ===")
         ping_res = run_cmd(f"ping -c 3 -i 0.2 -W 2 {VM_IP}", check=False)
         print(ping_res.stdout)
         assert ping_res.returncode == 0, f"Host ping failed: {ping_res.stderr}"
 
-        # 2. Host -> VM TCP Echo (10.77.0.2:7070)
         print("=== [TEST 2] Host -> VM TCP 3-way Handshake + Data Echo (:7070) ===")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(3.0)
@@ -199,7 +202,6 @@ def main():
         print(f"Sent {len(payload)}B, Echoed {len(echoed)}B: {echoed!r}")
         assert echoed == payload, f"TCP echo mismatch: {echoed!r}"
 
-        # 2b. Verify TCP RST on closed port (9999)
         print("=== [TEST 2b] Closed TCP Port (:9999) -> Immediate RST ===")
         s_closed = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s_closed.settimeout(2.0)
@@ -213,7 +215,6 @@ def main():
         assert rst_ok, "Expected ConnectionRefusedError (TCP RST) on closed port 9999!"
         print("Closed port TCP RST verified.")
 
-        # 3. VM UART commands: ifconfig, ping 10.77.0.1, dns nexos.local, netstat
         for cmd in ["ifconfig", f"ping {HOST_IP}", "dns nexos.local", "netstat", "exit"]:
             os.write(master, (cmd + "\n").encode())
             marker = "Exiting." if cmd == "exit" else "nexos#"
@@ -235,6 +236,9 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
         os.close(master)
+        os.makedirs(os.path.join("build", "test-logs"), exist_ok=True)
+        with open(os.path.join("build", "test-logs", "stage11_uart_transcript.txt"), "wb") as f:
+            f.write(bytes(uart_log))
         run_cmd(f"ip tuntap del dev {TAP_IF} mode tap 2>/dev/null || true", check=False)
 
     pcap_counts = inspect_pcap(PCAP_PATH)
