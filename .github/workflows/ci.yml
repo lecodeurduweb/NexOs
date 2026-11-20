@@ -2,7 +2,7 @@ name: NexOS CI
 
 on:
   push:
-    branches: [main, "ci/**"]
+    branches: [main, "ci/**", "fix/**", "feat/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -33,6 +33,14 @@ jobs:
             gcc-aarch64-linux-gnu iproute2 iputils-ping \
             python3 python3-pip ca-certificates
 
+      - name: Environment diagnostics
+        run: |
+          echo "event=${{ github.event_name }} ref=${{ github.ref }} sha=${{ github.sha }}"
+          nproc; free -h; df -h . | tail -1
+          qemu-system-aarch64 --version | head -1
+          aarch64-linux-gnu-gcc --version | head -1
+          python3 --version
+
       - name: Install Rust and bare-metal target
         run: |
           rustup toolchain install stable --profile minimal
@@ -56,13 +64,31 @@ jobs:
         run: npm run build
 
       - name: Run complete build and QEMU test suite
+        env:
+          NEXOS_BOOT_TIMEOUT: "120"
         run: python3 tests/run_all.py
+
+      - name: Show verification report
+        if: always()
+        run: |
+          if [ -f build/test-logs/report.json ]; then cat build/test-logs/report.json; fi
+          if [ -f build/test-logs/stage3_uart_transcript.txt ]; then
+            echo '::group::Stage 3 UART transcript'; cat build/test-logs/stage3_uart_transcript.txt; echo '::endgroup::'; fi
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexos-test-logs-${{ github.run_id }}
+          path: build/test-logs/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nexos-build-${{ github.sha }}
+          name: nexos-build-${{ github.run_id }}
           path: |
             build/qemu_virt/
             build/rpi4/
